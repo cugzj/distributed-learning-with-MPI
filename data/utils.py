@@ -1,68 +1,159 @@
+from os import replace
+from pickle import FALSE
 from random import Random
 from torch.utils.data import DataLoader, Subset, Dataset
+import numpy as np
 
-def data_catogerize(data:Dataset, seed=1234):
-    data_dict = {}
-    for idx in range(len(data)):
-        _, target = data.__getitem__(idx)
-        if target not in data_dict:
-            data_dict[target] = []
-        data_dict[target].append(idx)
-    rng = Random()
-    rng.seed(seed)
-    for key in data_dict.keys():
-        rng.shuffle(data_dict[key]) 
-    return data_dict
+class Partition(object):
+    """ Dataset-like object, but only access a subset of it. """
 
-def worker_labels(targets, num_workers, seed=1234):
-    labels, temp = [], [target for target in targets]
+    def __init__(self, data, index):
+        self.data = data
+        self.index = index
+        self.targets = self.__getTarget__()
 
-    for i in range(num_workers):
-        a = int(len(temp)/(num_workers - i))
-        labels.append(temp[0:a])  
-        temp = temp[a:]  
-    return labels 
+    def __len__(self):
+        return len(self.index)
 
-class NonIID_DataPartitioner(object):
+    def __getitem__(self, index):
+        data_idx = self.index[index]
+        return self.data[data_idx]
 
-    def __init__(self, train_data, test_data, sizes, classes=-1, seed=1234):
-        self.train_data, self.test_data = train_data, test_data
-        self.train_partitions, self.test_partitions = [], []
-        train_data_dict, test_data_dict = data_catogerize(train_data), data_catogerize(test_data)
-        rng = Random()
-        rng.seed(seed)
-        self.labels = labels = worker_labels(sorted(train_data_dict.keys()), len(sizes))
-        # self.labels = labels = worker_labels(train_data_dict.keys(), len(sizes))
+    def __getTarget__(self):
+        labelList = np.array(self.data.targets)
+        return np.unique(labelList[self.index])
 
-        for idx, ratio in enumerate(sizes): 
-            part_train_len, part_test_len = int(ratio * len(train_data)), int(ratio * len(test_data))
-            train_partition, test_partition = [], []
-            for j, label in enumerate(labels[idx]):
-                a = int(part_train_len / (len(labels[idx]) - j)) 
-                b = int(part_test_len / (len(labels[idx]) - j))
-                train_partition.extend(train_data_dict[label][0:a])
-                test_partition.extend(test_data_dict[label][0:b])
-                train_data_dict[label], test_data_dict[label] = train_data_dict[label][a:], test_data_dict[label][b:]
-                part_train_len, part_test_len = part_train_len - a, part_test_len - b
-            rng.shuffle(train_partition)
-            rng.shuffle(test_partition)
-            self.train_partitions.append(train_partition)
-            self.test_partitions.append(test_partition)
-        
+
+class DataPartitioner(object):
+    """ Partitions a dataset into different chuncks. """
+    def __init__(self, data, sizes=[0.7, 0.2, 0.1], seed=1234, isNonIID=True, isDirichlet=False, alpha=3):
+        self.data = data
+        if isNonIID:
+            if isDirichlet:
+                self.partitions, self.ratio = self.__getDirichletData__(data, sizes, seed, alpha)
+            else:
+                self.partitions, self.ratio = self.__getPathologicalData__(data, sizes, seed, alpha)
+
+        else:
+            self.partitions = {}
+            self.ratio = sizes
+            rng = Random() 
+            rng.seed(seed) 
+            data_len = len(data) 
+            indexes = [x for x in range(0, data_len)] 
+            rng.shuffle(indexes) 
+            
+            for idx, frac in enumerate(sizes): 
+                part_len = int(frac * data_len)
+                self.partitions[idx] = indexes[0:part_len]
+                indexes = indexes[part_len:]
+
     def use(self, partition):
-        return Subset(self.train_data, self.train_partitions[partition]), Subset(self.test_data, self.test_partitions[partition]), self.labels[partition]
+        return Partition(self.data, self.partitions[partition]), self.ratio[partition]
 
-def _get_dataset(train_dataset, test_dataset, workers, batch_size):
+    def __getDirichletData__(self, data, psizes, seed, alpha):
+        n_nets = len(psizes)
+        labelList = np.array(data.targets)
+        K = len(np.unique(labelList))
+        min_size = 0
+        N = len(labelList)
+        np.random.seed(seed)
+
+        net_dataidx_map = {}
+        while min_size < K:
+            idx_batch = [[] for _ in range(n_nets)]
+            # for each class in the dataset
+            for k in range(K):
+                idx_k = np.where(labelList == k)[0]
+                np.random.shuffle(idx_k)
+                proportions = np.random.dirichlet(np.repeat(alpha, n_nets))
+                ## Balance
+                proportions = np.array([p*(len(idx_j)<N/n_nets) for p,idx_j in zip(proportions,idx_batch)])
+                proportions = proportions/proportions.sum()
+                proportions = (np.cumsum(proportions)*len(idx_k)).astype(int)[:-1]
+                idx_batch = [idx_j + idx.tolist() for idx_j,idx in zip(idx_batch,np.split(idx_k,proportions))]
+                min_size = min([len(idx_j) for idx_j in idx_batch])
+
+        for j in range(n_nets):
+            np.random.shuffle(idx_batch[j])
+            net_dataidx_map[j] = idx_batch[j]
+
+        net_cls_counts = {}
+
+        for net_i, dataidx in net_dataidx_map.items():
+            unq, unq_cnt = np.unique(labelList[dataidx], return_counts=True)
+            tmp = {unq[i]: unq_cnt[i] for i in range(len(unq))}
+            net_cls_counts[net_i] = tmp
+        print('Data statistics: %s' % str(net_cls_counts))
+
+        local_sizes = []
+        for i in range(n_nets):
+            local_sizes.append(len(net_dataidx_map[i]))
+        local_sizes = np.array(local_sizes)
+        weights = local_sizes/np.sum(local_sizes)
+        print(weights)
+
+        return net_dataidx_map, weights
+
+    def __getPathologicalData__(self, data, size, seed, classes):
+        labelList = np.array(data.targets)
+        K = len(np.unique(labelList))
+        np.random.seed(seed)
+
+        classes = -1 if len(size) * classes < K and len(size) < K else max(min(classes, K), 1)
+        all_labels = np.arange(K)
+        if classes == -1:
+            worker_labels = np.array_split(all_labels, len(size))
+        else: 
+            worker_labels = np.concatenate([np.random.choice(all_labels, size=K, replace=False), 
+                                            np.random.choice(all_labels, size=len(size)*classes-K, 
+                                                             replace=True)]).reshape(len(size), classes)
+            # in case that some sets exist duplicate 
+            for idx, _ in enumerate(worker_labels):
+                while len(np.unique(worker_labels[idx])) != classes:
+                    worker_labels[idx] = np.random.choice(all_labels, classes, replace=False)
+        
+        data_dict = {}
+        for k in range(K):
+            data_dict[k] = np.where(labelList == k)[0]
+            np.random.shuffle(data_dict[k])
+        
+        net_dataidx_map = {}
+
+        for idx, _ in enumerate(size):
+            net_dataidx_map[idx] = []
+            for label in worker_labels[idx]:
+                num_label = len(np.where(worker_labels.reshape(-1) == label)[0])
+                a = len(np.where(labelList == label)[0]) // num_label
+                net_dataidx_map[idx] += list(data_dict[label][0:a])
+                data_dict[label] = data_dict[label][a:]
+            np.random.shuffle(net_dataidx_map[idx])
+        
+        net_cls_counts = {}
+
+        for net_i, dataidx in net_dataidx_map.items():
+            unq, unq_cnt = np.unique(labelList[dataidx], return_counts=True)
+            tmp = {unq[i]: unq_cnt[i] for i in range(len(unq))}
+            net_cls_counts[net_i] = tmp
+        print('Data statistics: %s' % str(net_cls_counts))
+
+        local_sizes = []
+        for i, _ in enumerate(size):
+            local_sizes.append(len(net_dataidx_map[i]))
+        local_sizes = np.array(local_sizes)
+        weights = local_sizes/np.sum(local_sizes)
+        print(weights)
+
+        return net_dataidx_map, weights
+
+
+def _get_dataset(rank, dataset, workers:list, batch_size:int):
     """ Partitioning Data """
     workers_num = len(workers)
     partition_sizes = [1.0 / workers_num for _ in range(workers_num)]
 
-    partition = NonIID_DataPartitioner(train_dataset, test_dataset, partition_sizes)
-    
-    train_loader, test_loader, labels = {}, {}, {}
-    for i in workers:
-        train_data, test_data, labels[i] = partition.use(i)
-        train_loader[i] = DataLoader(train_data, batch_size=batch_size, shuffle=False)
-        test_loader[i]  = DataLoader(test_data, batch_size=batch_size, shuffle=False)
+    partition = DataPartitioner(dataset, partition_sizes)
 
-    return train_loader, test_loader, labels
+    data, ratio = partition.use(workers.index(rank))
+    
+    return DataLoader(dataset=data, batch_size=batch_size, shuffle=False), ratio
