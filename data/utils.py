@@ -1,8 +1,32 @@
 from os import replace
 from pickle import FALSE
 from random import Random
-from torch.utils.data import DataLoader, Subset, Dataset
 import numpy as np
+
+class new_Partition(object):
+    """ Dataset-like object, but only access a subset of it. """
+
+    def __init__(self, data, index):
+        print(type(data.data))
+        print(data.data.shape)
+        self.data = data.data[index]
+        self.targets = data.targets[index]
+        # self.data = torch.tensor([data[i][0] for i in index])
+        print(self.data.shape, self.targets.shape)
+        # self.index = index
+        # self.targets = self.__getTarget__()
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        return self.data[index]
+        # data_idx = self.index[index]
+        # return self.data[data_idx]
+
+    def __getTarget__(self):
+        labelList = np.array(self.data.targets)
+        return np.unique(labelList[self.index])
 
 class Partition(object):
     """ Dataset-like object, but only access a subset of it. """
@@ -10,7 +34,8 @@ class Partition(object):
     def __init__(self, data, index):
         self.data = data
         self.index = index
-        self.targets = self.__getTarget__()
+        self.targets = data.targets[index]
+        self.unique_targets = self.__getUniqueTarget__()
 
     def __len__(self):
         return len(self.index)
@@ -19,14 +44,21 @@ class Partition(object):
         data_idx = self.index[index]
         return self.data[data_idx]
 
-    def __getTarget__(self):
+    def __getUniqueTarget__(self):
         labelList = np.array(self.data.targets)
         return np.unique(labelList[self.index])
 
-
+'''
+    Data partitioner
+    :param data: imgs from dataset such as CIFAR10 
+    :param sizes: 
+    :param isNonIID: True indicates the data are heterogeneous 
+    :param isDirichlet: True indicates the non-iid data distribution follows Dirichlet 
+    :param alpha: positive real number for dirichlet distribution while positive integer for pathological 
+'''
 class DataPartitioner(object):
     """ Partitions a dataset into different chuncks. """
-    def __init__(self, data, sizes=[0.7, 0.2, 0.1], seed=1234, isNonIID=True, isDirichlet=False, alpha=3):
+    def __init__(self, data, sizes=[0.7, 0.2, 0.1], isNonIID=True, isDirichlet=False, alpha=3, seed=1234):
         self.data = data
         if isNonIID:
             if isDirichlet:
@@ -146,14 +178,18 @@ class DataPartitioner(object):
 
         return net_dataidx_map, weights
 
-
-def _get_dataset(rank, dataset, workers:list, batch_size:int):
+def _get_partitioner(dataset, workers:list, isNonIID=True, isDirichlet=False, alpha=3):
     """ Partitioning Data """
     workers_num = len(workers)
     partition_sizes = [1.0 / workers_num for _ in range(workers_num)]
 
-    partition = DataPartitioner(dataset, partition_sizes)
+    partitioner = DataPartitioner(dataset, partition_sizes, isNonIID, isDirichlet, alpha)
 
-    data, ratio = partition.use(workers.index(rank))
-    
-    return DataLoader(dataset=data, batch_size=batch_size, shuffle=False), ratio
+    return partitioner
+
+def _use_partitioner(partitioner, rank, workers:list):
+    return partitioner.use(workers.index(rank))
+
+def _get_dataset(rank, dataset, workers:list, isNonIID=True, isDirichlet=False, alpha=3):
+    partitioner = _get_partitioner(dataset, workers, isNonIID, isDirichlet, alpha)
+    return _use_partitioner(partitioner, rank, workers)
