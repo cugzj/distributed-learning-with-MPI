@@ -3,11 +3,12 @@ from torchvision.datasets.folder import ImageFolder
 import torchvision.transforms as transforms
 import os
 
-from utils import _get_partitioner, _use_partitioner
+from .utils import _get_partitioner, _use_partitioner
+
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
 
 def get_dataset(ranks:list, workers:list, isNonIID:bool, isDirichlet:bool=False, alpha=3, data_aug:bool=True, dataset_root='./dataset'):
     if data_aug:
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         trainset = MNIST(root=dataset_root + '/mnist_data', train=True, download=True, transform=transform)
         testset = MNIST(root=dataset_root + '/mnist_data', train=False, download=True, transform=transform)
     else:
@@ -22,7 +23,6 @@ def get_dataset(ranks:list, workers:list, isNonIID:bool, isDirichlet:bool=False,
     return data_ratio_pairs, testset
 
 def get_dataset_with_precat(ranks:list, workers:list, dataset_root='./dataset'):
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
     testset = MNIST(root=dataset_root + '/mnist_data', train=False, download=True, transform=transform)
 
     data_ratio_pairs = []

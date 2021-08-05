@@ -3,12 +3,15 @@ from torchvision.datasets import ImageFolder
 from torchvision.datasets.utils import download_and_extract_archive
 import torchvision.transforms as transforms
 
-from utils import _get_partitioner, _use_partitioner
+from .utils import _get_partitioner, _use_partitioner
 
 class TinyImagenet(ImageFolder):
     """
     Defines Tiny Imagenet as for the others pytorch datasets.
     """
+    # CAUTION: SET THE LINK BELOW TO EMPTY WHEN MADE PUBLIC 
+    DOWNLOAD = ""
+
     def __init__(self, root: str, train: bool=True, transform: transforms=None,
                 target_transform: transforms=None, download: bool=False):
         self.not_aug_transform = transforms.Compose([transforms.ToTensor()])
@@ -17,12 +20,12 @@ class TinyImagenet(ImageFolder):
         self.download = download
 
         if download:
-            if os.path.isdir(root) and len(os.listdir(root)) > 0:
+            if os.path.exists(os.path.join(root, os.path.basename(self.DOWNLOAD))):
                 print('Files already downloaded and verified')
             else:
-                url = 'http://www.image-net.org/data/tiny-imagenet-200.zip'
-                filename = url.rpartition('/')[2]
-                download_and_extract_archive(url, self.root)
+                if self.DOWNLOAD == "" or self.DOWNLOAD is None:
+                    raise Exception("The dataset is no longer publicly accessible. ")
+                download_and_extract_archive(self.DOWNLOAD, self.root)
                 print('Processing...')
 
         self.data, self.targets = [], []
@@ -46,24 +49,26 @@ class TinyImagenet(ImageFolder):
         root = os.path.join(root, 'tiny-imagenet-200/{}'.format('train' if train else 'val'))
         super(TinyImagenet, self).__init__(root, transform=transform, target_transform=target_transform)
 
+
+
+train_transform = transforms.Compose([
+    transforms.RandomCrop(64, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize((0.4802, 0.4480, 0.3975), (0.2770, 0.2691, 0.2821))
+])
+test_transform = transforms.Compose([ 
+    transforms.ToTensor(), 
+    transforms.Normalize((0.4802, 0.4480, 0.3975), (0.2770, 0.2691, 0.2821)), 
+])
+
 def get_dataset(ranks:list, workers:list, isNonIID:bool, isDirichlet:bool=False, alpha=3, data_aug:bool=True, dataset_root='./dataset'):
     if data_aug:
-        train_transform = transforms.Compose([
-            transforms.RandomCrop(64, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4802, 0.4480, 0.3975), (0.2770, 0.2691, 0.2821))
-        ])
-        test_transform = transforms.Compose([ 
-            transforms.ToTensor(), 
-            transforms.Normalize((0.4802, 0.4480, 0.3975), (0.2770, 0.2691, 0.2821)), 
-        ])
-        
-        trainset = TinyImagenet('./dataset/TinyImageNet', train=True, download=True, transform=train_transform)
-        testset = TinyImagenet('./dataset/TinyImageNet', train=False, download=True, transform=test_transform)
+        trainset = TinyImagenet(root=dataset_root + '/TinyImageNet', train=True, download=True, transform=train_transform)
+        testset = TinyImagenet(root=dataset_root + '/TinyImageNet', train=False, download=True, transform=test_transform)
     else: 
-        trainset = TinyImagenet('./dataset/TinyImageNet', train=True, download=True)
-        testset = TinyImagenet('./dataset/TinyImageNet', train=False, download=True)
+        trainset = TinyImagenet(root=dataset_root + '/TinyImageNet', train=True, download=True)
+        testset = TinyImagenet(root=dataset_root + '/TinyImageNet', train=False, download=True)
     
     partitioner = _get_partitioner(trainset, workers, isNonIID, isDirichlet, alpha)
     data_ratio_pairs = []
@@ -73,14 +78,13 @@ def get_dataset(ranks:list, workers:list, isNonIID:bool, isDirichlet:bool=False,
     return data_ratio_pairs, testset
 
 def get_dataset_with_precat(ranks:list, workers:list, dataset_root='./dataset'):
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-    testset = TinyImagenet(root=dataset_root + '/TinyImageNet', train=False, download=True, transform=transform)
+    testset = TinyImagenet(root=dataset_root + '/TinyImageNet', train=False, download=True, transform=test_transform)
 
     data_ratio_pairs = []
     for rank in ranks:
         idx = workers.index(rank)
         current_path = dataset_root + '/TinyImageNet/{}_partitions/{}'.format(len(workers), idx)
-        trainset = ImageFolder(root=current_path, transform=transform)
+        trainset = ImageFolder(root=current_path, transform=train_transform)
         with open(current_path + '/weight.txt', 'r') as f:
             ratio = eval(f.read())
         data_ratio_pairs.append((trainset, ratio))

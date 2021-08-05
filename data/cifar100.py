@@ -3,20 +3,21 @@ from torchvision.datasets.folder import ImageFolder
 import torchvision.transforms as transforms
 import os
 
-from utils import _get_partitioner, _use_partitioner
+from .utils import _get_partitioner, _use_partitioner
+
+train_transform = transforms.Compose([ 
+    transforms.RandomCrop(32, padding=4), 
+    transforms.RandomHorizontalFlip(), 
+    transforms.ToTensor(), 
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), 
+])
+test_transform = transforms.Compose([ 
+    transforms.ToTensor(), 
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), 
+])
 
 def get_dataset(ranks:list, workers:list, isNonIID:bool, isDirichlet:bool=False, alpha=3, data_aug:bool=True, dataset_root='./dataset'):
     if data_aug:
-        train_transform = transforms.Compose([ 
-            transforms.RandomCrop(32, padding=4), 
-            transforms.RandomHorizontalFlip(), 
-            transforms.ToTensor(), 
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), 
-        ])
-        test_transform = transforms.Compose([ 
-            transforms.ToTensor(), 
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), 
-        ])
         trainset = CIFAR100(dataset_root + '/cifar100_data', train=True, download=True, transform=train_transform)
         testset = CIFAR100(dataset_root + '/cifar100_data', train=False, download=True, transform=test_transform)
     else: 
@@ -31,14 +32,13 @@ def get_dataset(ranks:list, workers:list, isNonIID:bool, isDirichlet:bool=False,
     return data_ratio_pairs, testset
 
 def get_dataset_with_precat(ranks:list, workers:list, dataset_root='./dataset'):
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-    testset = CIFAR100(root=dataset_root + '/cifar100_data', train=False, download=True, transform=transform)
+    testset = CIFAR100(root=dataset_root + '/cifar100_data', train=False, download=True, transform=test_transform)
 
     data_ratio_pairs = []
     for rank in ranks:
         idx = workers.index(rank)
         current_path = dataset_root + '/cifar100_data/{}_partitions/{}'.format(len(workers), idx)
-        trainset = ImageFolder(root=current_path, transform=transform)
+        trainset = ImageFolder(root=current_path, transform=train_transform)
         with open(current_path + '/weight.txt', 'r') as f:
             ratio = eval(f.read())
         data_ratio_pairs.append((trainset, ratio))
