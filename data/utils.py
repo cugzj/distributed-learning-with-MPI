@@ -188,7 +188,7 @@ def _get_partitioner(dataset, workers:list, isNonIID=True, isDirichlet=False, al
     return partitioner
 
 def _use_partitioner(partitioner, rank, workers:list):
-    return partitioner.use(workers.index(rank))
+    return partitioner.use(np.where(workers == rank)[0][0])
 
 def _get_dataset(rank, dataset, workers:list, isNonIID=True, isDirichlet=False, alpha=3):
     partitioner = _get_partitioner(dataset, workers, isNonIID, isDirichlet, alpha)

@@ -1,0 +1,39 @@
+##!/bin/sh
+#PBS -N noniid_train
+#PBS -l nodes=1:ppn=10 -W x=GRES:gpu@2
+#PBS -l walltime=36:00:00
+#PBS -q qgpu01
+#PBS -V
+#PBS -S /bin/bash
+
+module load anaconda3-2021.05
+module load openmpi-4.0.1-gcc-8.3.0-cuda-10.1
+source activate dist_learning
+#################################################################
+NP=`cat $PBS_NODEFILE | wc -l`
+NN=`cat $PBS_NODEFILE | sort | uniq | tee /tmp/nodes.$$ | wc -l`
+cat $PBS_NODEFILE > /tmp/nodefile.$$
+echo "process will start at : "
+date
+echo "++++++++++++++++++++++++++++++++++++++++"
+cd $PBS_O_WORKDIR
+
+nvidia-smi > nv.out
+
+# This is the sample for DGS
+
+echo $NP
+export OMPI_MCA_btl_openib_allow_ib=1
+export OMPI_MCA_btl_openib_if_include="mlx5_0:1"
+mpiexec -n $NP python -u start.py --root ~/dataset --non-iid True --dirichlet True > test.out
+
+
+echo "++++++++++++++++++++++++++++++++++++++++"
+echo "process end at : "
+date
+rm -f /tmp/nodefile.$$
+rm -f /tmp/nodes.$$
+
+conda deactivate
+module unload openmpi-4.0.1-gcc-8.3.0-cuda-10.1
+module unload anaconda3-2021.05

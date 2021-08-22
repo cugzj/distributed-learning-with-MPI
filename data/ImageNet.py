@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from torchvision.datasets import ImageNet, ImageFolder
 from torchvision.datasets.utils import download_url
 import torchvision.transforms as transforms
@@ -37,7 +38,7 @@ class myImageNet(ImageNet):
                 download_url(self.DEVKIT_DOWNLOAD, self.root)
 
         split = 'train' if train else 'val'
-        super(myImageNet, self).__init__(root, split=split, download=download, transform=transform, target_transform=target_transform)
+        super(myImageNet, self).__init__(root, split=split, transform=transform, target_transform=target_transform)
 
 
 
@@ -74,7 +75,7 @@ def get_dataset_with_precat(ranks:list, workers:list, dataset_root='./dataset'):
 
     data_ratio_pairs = []
     for rank in ranks:
-        idx = workers.index(rank)
+        idx = np.where(workers == rank)[0][0]
         current_path = dataset_root + '/TinyImageNet/{}_partitions/{}'.format(len(workers), idx)
         trainset = ImageFolder(root=current_path, transform=train_transform)
         with open(current_path + '/weight.txt', 'r') as f:
@@ -82,6 +83,10 @@ def get_dataset_with_precat(ranks:list, workers:list, dataset_root='./dataset'):
         data_ratio_pairs.append((trainset, ratio))
     
     return data_ratio_pairs, testset
+
+def get_testdataset(dataset_root='./dataset'):
+    testset = myImageNet(root=dataset_root + '/TinyImageNet', train=False, download=True, transform=test_transform)
+    return testset
 
 if __name__ == "__main__":
     # store partitioned dataset 
@@ -93,15 +98,17 @@ if __name__ == "__main__":
     path = path + '/TinyImageNet/{}_partitions'.format(num_workers)
     if os.path.exists(path) is False:
         os.makedirs(path)
-
+    
     for idx, pair in enumerate(data_ratio_pairs):
         data, ratio = pair
         current_path = os.path.join(path, str(idx))
-        if os.path.exists(current_path) is False:
-            os.makedirs(current_path)
-        
+        if os.path.exists(current_path):
+            import shutil
+            shutil.rmtree(current_path)
+        os.makedirs(current_path)
+
         with open(current_path + '/weight.txt', 'w') as f:
-            f.write(ratio)
+            f.write('{}\t{}\n'.format(idx, ratio))
         
         for i in range(len(data)):
             sample, target = data[i]

@@ -1,4 +1,5 @@
 from torchvision.datasets import MNIST
+import numpy as np
 from torchvision.datasets.folder import ImageFolder
 import torchvision.transforms as transforms
 import os
@@ -27,7 +28,7 @@ def get_dataset_with_precat(ranks:list, workers:list, dataset_root='./dataset'):
 
     data_ratio_pairs = []
     for rank in ranks:
-        idx = workers.index(rank)
+        idx = np.where(workers == rank)[0][0]
         current_path = dataset_root + '/mnist_data/{}_partitions/{}'.format(len(workers), idx)
         trainset = ImageFolder(root=current_path, transform=transform)
         with open(current_path + '/weight.txt', 'r') as f:
@@ -35,6 +36,10 @@ def get_dataset_with_precat(ranks:list, workers:list, dataset_root='./dataset'):
         data_ratio_pairs.append((trainset, ratio))
     
     return data_ratio_pairs, testset
+
+def get_testdataset(dataset_root='./dataset'):
+    testset = MNIST(root=dataset_root + '/mnist_data', train=False, download=True, transform=transform)
+    return testset
 
 if __name__ == "__main__":
     # store partitioned dataset 
