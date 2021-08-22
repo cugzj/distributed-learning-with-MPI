@@ -1,3 +1,0 @@
-Last update: 20210111
-Here we use FedAveraging as a demo 
-Verified version... 

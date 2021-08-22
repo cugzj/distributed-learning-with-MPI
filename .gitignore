@@ -130,3 +130,9 @@ dmypy.json
 
 # Avoid unauthorized link leakage 
 *.link
+
+# Result files 
+result/
+*.out
+*.e*
+*.o*
