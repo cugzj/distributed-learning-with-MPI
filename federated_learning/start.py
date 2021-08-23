@@ -27,6 +27,8 @@ parser.add_argument('--result', type=str, default='./result', help='The director
 
 # Other settings
 parser.add_argument('--bsz', type=int, default=64, help='Batch size for training dataset')
+parser.add_argument('--partial', type=bool, default=False, help='Partial workers selection') 
+parser.add_argument('--num-part', type=int, default=1, help='Number of partipants')
 # parser.add_argument('--num-gpus', type=int, default=1, help='Number of GPUs')
 try:
     # Use MPI 
@@ -60,7 +62,7 @@ dataset = importlib.import_module('data.{}'.format(args.dataset))
 model = importlib.import_module('models.{}'.format(args.dataset))
 model = getattr(model, args.model)()
 
-workers = numpy.arange(args.num_workers) + 1  # workers' indices start with 1 
+workers = numpy.arange(args.num_workers) + 1  # workers' indices start with 1, server is always 0 
 
 # Define CPU 
 cpu = torch.device('cpu')

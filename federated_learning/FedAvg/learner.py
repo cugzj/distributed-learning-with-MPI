@@ -24,10 +24,10 @@ def run(rank, size, model, args, data_ratio_pairs, cpu, gpu):
     weights = [w for _, w in data_ratio_pairs]
     dist.gather(tensor=torch.tensor(weights), dst=0)
 
-    # model = model.cuda(gpu)
-    # criterion = torch.nn.CrossEntropyLoss()
+    model = model.cuda(gpu)
+    criterion = torch.nn.CrossEntropyLoss()
     # iterator = iter(train_data)
-    # optimizer = SGD(model.parameters(), lr=args.lr)
+    optimizer = SGD(model.parameters(), lr=args.lr)
 
     # workers = [v+1 for v in range(size-1)]
     # _group = [w for w in workers].append(rank)
