@@ -20,7 +20,7 @@ parser.add_argument('--pathological', type=bool, default=False, help='Non-iid di
 parser.add_argument('--classes', type=int, default=2, help='Number of classes on each client')
 
 # Model 
-parser.add_argument('--model', type=str, default='ResNet18', help='The name of model used')
+parser.add_argument('--model', type=str, default='VGG19', help='The name of model used') 
 
 # Result output root 
 parser.add_argument('--result', type=str, default='./result', help='The directory of the result')
@@ -81,7 +81,7 @@ if mpi:
         else:
             alpha = args.dir_alpha if args.dirichlet else args.classes
             data_ratio_pairs, _ = dataset.get_dataset(ranks, workers, args.non_iid, args.dirichlet, alpha, dataset_root=args.root)
-        learner.init_processes(idex, size, model, args, data_ratio_pairs, cpu, gpu)
+        learner.init_processes(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu)
 else:
     # Run with multiprocessing 
     pass
