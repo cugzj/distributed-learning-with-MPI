@@ -17,23 +17,23 @@ def get_dataset(ranks:list, workers:list, isNonIID:bool, isDirichlet:bool=False,
         testset = MNIST(root=dataset_root + '/mnist_data', train=False, download=True)
     
     partitioner = _get_partitioner(trainset, workers, isNonIID, isDirichlet, alpha)
-    data_ratio_pairs = []
+    data_ratio_pairs = {}
     for rank in ranks:
         data, ratio = _use_partitioner(partitioner, rank, workers)
-        data_ratio_pairs.append((data, ratio))
+        data_ratio_pairs[rank] = (data, ratio)
     return data_ratio_pairs, testset
 
 def get_dataset_with_precat(ranks:list, workers:list, dataset_root='./dataset'):
     testset = MNIST(root=dataset_root + '/mnist_data', train=False, download=True, transform=transform)
 
-    data_ratio_pairs = []
+    data_ratio_pairs = {}
     for rank in ranks:
         idx = np.where(workers == rank)[0][0]
         current_path = dataset_root + '/mnist_data/{}_partitions/{}'.format(len(workers), idx)
         trainset = ImageFolder(root=current_path, transform=transform)
         with open(current_path + '/weight.txt', 'r') as f:
             ratio = eval(f.read())
-        data_ratio_pairs.append((trainset, ratio))
+        data_ratio_pairs[rank] = (trainset, ratio)
     
     return data_ratio_pairs, testset
 
