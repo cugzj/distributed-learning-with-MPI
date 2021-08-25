@@ -48,53 +48,37 @@ except:
     parser.add_argument('--num-workers',type=int, default=1, help='Total number of workers')
 
 
-import importlib
-# import an algorithm's server and learner and arguments 
-add_parser_arguments = importlib.import_module('{}.add_parser_arguments'.format(method))
-param_server = importlib.import_module('{}.param_server'.format(method))
-learner = importlib.import_module('{}.learner'.format(method))
+if __name__ == "__main__":
 
-# add arguments 
-add_parser_arguments.new_arguements(parser)
-args = parser.parse_args()
+    import importlib
+    # import an algorithm's server and learner and arguments 
+    add_parser_arguments = importlib.import_module('{}.add_parser_arguments'.format(method))
+    param_server = importlib.import_module('{}.param_server'.format(method))
+    learner = importlib.import_module('{}.learner'.format(method))
 
-# import dataset and model 
-import sys
-sys.path.insert(1, '../')
-dataset = importlib.import_module('data.{}'.format(args.dataset))
-model = importlib.import_module('models.{}'.format(args.dataset))
-model = getattr(model, args.model)()
+    # add arguments 
+    add_parser_arguments.new_arguements(parser)
+    args = parser.parse_args()
 
-workers = numpy.arange(args.num_workers) + 1  # workers' indices start with 1, server is always 0 
+    # import dataset and model 
+    import sys
+    sys.path.insert(1, '../')
+    dataset = importlib.import_module('data.{}'.format(args.dataset))
+    model = importlib.import_module('models.{}'.format(args.dataset))
+    model = getattr(model, args.model)()
 
-# Define CPU 
-cpu = torch.device('cpu')
+    workers = numpy.arange(args.num_workers) + 1  # workers' indices start with 1, server is always 0 
 
-if mpi:
-    gpu = torch.device('cuda:{}'.format(idex%torch.cuda.device_count())) if torch.cuda.is_available() else torch.device('cpu')
-    print('Hello World MPI! I am process', idex, 'of', size)
-    # Run with MPI
-    if idex == 0:
-        test_data = dataset.get_testdataset(args.root)
-        param_server.init_processes(idex, size, model, args, test_data, cpu, gpu, args.backend.lower())
-    else:
-        ranks = numpy.array_split(workers, size-1)[idex-1]
-        if args.presplit:
-            data_ratio_pairs, _ = dataset.get_dataset_with_precat(ranks, workers, args.root)
-        else:
-            alpha = args.dir_alpha if args.dirichlet else args.classes
-            data_ratio_pairs, _ = dataset.get_dataset(ranks, workers, args.non_iid, args.dirichlet, alpha, dataset_root=args.root)
-        learner.init_processes(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu, args.backend.lower())
-else:
-    # Run with multiprocessing
-    processes, size = [], args.size+1
-    mp.set_start_method("spawn")
-    for idex in range(size):
+    # Define CPU 
+    cpu = torch.device('cpu')
+
+    if mpi:
         gpu = torch.device('cuda:{}'.format(idex%torch.cuda.device_count())) if torch.cuda.is_available() else torch.device('cpu')
-        print('Hello World Multiprocessing! I am process', idex, 'of', size)
+        print('Hello World MPI! I am process', idex, 'of', size)
+        # Run with MPI
         if idex == 0:
             test_data = dataset.get_testdataset(args.root)
-            p = mp.Process(target=param_server.init_processes, args=(idex, size, model, args, test_data, cpu, gpu, 'gloo'))
+            param_server.init_processes(idex, size, model, args, test_data, cpu, gpu, args.backend.lower())
         else:
             ranks = numpy.array_split(workers, size-1)[idex-1]
             if args.presplit:
@@ -102,13 +86,32 @@ else:
             else:
                 alpha = args.dir_alpha if args.dirichlet else args.classes
                 data_ratio_pairs, _ = dataset.get_dataset(ranks, workers, args.non_iid, args.dirichlet, alpha, dataset_root=args.root)
-            p = mp.Process(target=learner.init_processes, args=(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu, 'gloo'))
-        p.start()
-        processes.append(p)
+            learner.init_processes(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu, args.backend.lower())
     
-    for p in processes:
-        p.join()
+    else:
+        # Run with multiprocessing
+        processes, size = [], args.size+1
+        mp.set_start_method("spawn")
+        for idex in range(size):
+            gpu = torch.device('cuda:{}'.format(idex%torch.cuda.device_count())) if torch.cuda.is_available() else torch.device('cpu')
+            print('Hello World Multiprocessing! I am process', idex, 'of', size)
+            if idex == 0:
+                test_data = dataset.get_testdataset(args.root)
+                p = mp.Process(target=param_server.init_processes, args=(idex, size, model, args, test_data, cpu, gpu, 'gloo'))
+            else:
+                ranks = numpy.array_split(workers, size-1)[idex-1]
+                if args.presplit:
+                    data_ratio_pairs, _ = dataset.get_dataset_with_precat(ranks, workers, args.root)
+                else:
+                    alpha = args.dir_alpha if args.dirichlet else args.classes
+                    data_ratio_pairs, _ = dataset.get_dataset(ranks, workers, args.non_iid, args.dirichlet, alpha, dataset_root=args.root)
+                p = mp.Process(target=learner.init_processes, args=(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu, 'gloo'))
+            p.start()
+            processes.append(p)
+        
+        for p in processes:
+            p.join()
 
-    
+        
 
-# Usage: Different approaches should create dedicated param_server and learners 
+    # Usage: Different approaches should create dedicated param_server and learners 
