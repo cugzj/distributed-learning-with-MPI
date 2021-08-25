@@ -94,7 +94,7 @@ else:
         print('Hello World Multiprocessing! I am process', idex, 'of', size)
         if idex == 0:
             test_data = dataset.get_testdataset(args.root)
-            p = mp.Process(target=param_server.init_processes, args=(idex, size, model, args, test_data, cpu, gpu, args.backend.lower()))
+            p = mp.Process(target=param_server.init_processes, args=(idex, size, model, args, test_data, cpu, gpu, 'gloo'))
         else:
             ranks = numpy.array_split(workers, size-1)[idex-1]
             if args.presplit:
@@ -102,7 +102,7 @@ else:
             else:
                 alpha = args.dir_alpha if args.dirichlet else args.classes
                 data_ratio_pairs, _ = dataset.get_dataset(ranks, workers, args.non_iid, args.dirichlet, alpha, dataset_root=args.root)
-            p = mp.Process(target=learner.init_processes, args=(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu, args.backend.lower()))
+            p = mp.Process(target=learner.init_processes, args=(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu, 'gloo'))
         p.start()
         processes.append(p)
     
