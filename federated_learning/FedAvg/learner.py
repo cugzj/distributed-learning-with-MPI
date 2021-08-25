@@ -1,10 +1,11 @@
 import numpy as np
+from copy import deepcopy
+import os
+
 import torch
-from torch._C import device
 from torch.optim import SGD
 import torch.distributed as dist
 from torch.autograd import Variable
-from copy import deepcopy
 
 def update_model(model, aggregated_model, cpu, gpu):
     # all_param = model.state_dict()
@@ -86,5 +87,10 @@ def run(workers, size, model, args, data_ratio_pairs:dict, cpu, gpu):
         
 
 def init_processes(rank, workers, size, model, args, data_ratio_pairs, cpu, gpu, backend='mpi'):
-    dist.init_process_group(backend, rank=rank, world_size=size)
+    if backend == 'mpi':
+        dist.init_process_group(backend, rank=rank, world_size=size)
+    elif backend == 'gloo':
+        os.environ['MASTER_ADDR'] = '127.0.0.1'
+        os.environ['MASTER_PORT'] = '29500'
+        dist.init_process_group(backend, rank=rank, world_size=size)
     run(workers, size, model, args, data_ratio_pairs, cpu, gpu)

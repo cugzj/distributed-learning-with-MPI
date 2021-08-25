@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+from multiprocessing import process
 import os, numpy
 import torch
+import torch.multiprocessing as mp
 
 # Creat the parser 
 import argparse
@@ -38,6 +40,7 @@ try:
     idex = MPI.COMM_WORLD.Get_rank()
     parser.add_argument('--num-workers',type=int, default=(size-1), help='Total number of workers')
     parser.add_argument('--multiprocessing', type=bool, default=False, help='Whether to use multiprocessing (not implemented yet)')
+    parser.add_argument('--backend', type=str, default='mpi', help='MPI or GLOO')
 except:
     # Use Multiprocessing 
     mpi = False
@@ -69,11 +72,11 @@ cpu = torch.device('cpu')
 
 if mpi:
     gpu = torch.device('cuda:{}'.format(idex%torch.cuda.device_count())) if torch.cuda.is_available() else torch.device('cpu')
-    print('Hello World! I am process', idex, 'of', size)
+    print('Hello World MPI! I am process', idex, 'of', size)
     # Run with MPI
     if idex == 0:
         test_data = dataset.get_testdataset(args.root)
-        param_server.init_processes(idex, size, model, args, test_data, cpu, gpu)
+        param_server.init_processes(idex, size, model, args, test_data, cpu, gpu, args.backend.lower())
     else:
         ranks = numpy.array_split(workers, size-1)[idex-1]
         if args.presplit:
@@ -81,9 +84,31 @@ if mpi:
         else:
             alpha = args.dir_alpha if args.dirichlet else args.classes
             data_ratio_pairs, _ = dataset.get_dataset(ranks, workers, args.non_iid, args.dirichlet, alpha, dataset_root=args.root)
-        learner.init_processes(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu)
+        learner.init_processes(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu, args.backend.lower())
 else:
-    # Run with multiprocessing 
-    pass
+    # Run with multiprocessing
+    processes = []
+    mp.set_start_method("spawn")
+    for idex in range(args.size+1):
+        gpu = torch.device('cuda:{}'.format(idex%torch.cuda.device_count())) if torch.cuda.is_available() else torch.device('cpu')
+        print('Hello World Multiprocessing! I am process', idex, 'of', size)
+        if idex == 0:
+            test_data = dataset.get_testdataset(args.root)
+            p = mp.Process(target=param_server.init_processes, args=(idex, size, model, args, test_data, cpu, gpu, args.backend.lower()))
+        else:
+            ranks = numpy.array_split(workers, size-1)[idex-1]
+            if args.presplit:
+                data_ratio_pairs, _ = dataset.get_dataset_with_precat(ranks, workers, args.root)
+            else:
+                alpha = args.dir_alpha if args.dirichlet else args.classes
+                data_ratio_pairs, _ = dataset.get_dataset(ranks, workers, args.non_iid, args.dirichlet, alpha, dataset_root=args.root)
+            p = mp.Process(target=learner.init_processes, args=(idex, ranks, size, model, args, data_ratio_pairs, cpu, gpu, args.backend.lower()))
+        p.start()
+        processes.append(p)
+    
+    for p in processes:
+        p.join()
+
+    
 
 # Usage: Different approaches should create dedicated param_server and learners 

@@ -119,7 +119,12 @@ def run(size, model, args, test_data, f_result, cpu, gpu):
         f_result.flush()
 
 def init_processes(rank, size, model, args, test_data, cpu, gpu, backend='mpi'):
-    dist.init_process_group(backend, rank=rank, world_size=size)
+    if backend == 'mpi':
+        dist.init_process_group(backend, rank=rank, world_size=size)
+    elif backend == 'gloo':
+        os.environ['MASTER_ADDR'] = '127.0.0.1'
+        os.environ['MASTER_PORT'] = '29500'
+        dist.init_process_group(backend, rank=rank, world_size=size)
     if not os.path.exists(args.result):
         os.makedirs(args.result)
     result_file = os.path.join(args.result, '{}.txt'.format(len(os.listdir(args.result))))
