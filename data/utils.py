@@ -1,38 +1,12 @@
 from random import Random
 import numpy as np
 
-class new_Partition(object):
-    """ Dataset-like object, but only access a subset of it. """
-
-    def __init__(self, data, index):
-        print(type(data.data))
-        print(data.data.shape)
-        self.data = data.data[index]
-        self.targets = data.targets[index]
-        # self.data = torch.tensor([data[i][0] for i in index])
-        print(self.data.shape, self.targets.shape)
-        # self.index = index
-        # self.targets = self.__getTarget__()
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, index):
-        return self.data[index]
-        # data_idx = self.index[index]
-        # return self.data[data_idx]
-
-    def __getTarget__(self):
-        labelList = np.array(self.data.targets)
-        return np.unique(labelList[self.index])
-
 class Partition(object):
     """ Dataset-like object, but only access a subset of it. """
 
     def __init__(self, data, index):
         self.data = data
         self.index = index
-        self.targets = data.targets[index]
         self.unique_targets = self.__getUniqueTarget__()
 
     def __len__(self):
@@ -114,14 +88,14 @@ class DataPartitioner(object):
             unq, unq_cnt = np.unique(labelList[dataidx], return_counts=True)
             tmp = {unq[i]: unq_cnt[i] for i in range(len(unq))}
             net_cls_counts[net_i] = tmp
-        print('Data statistics: %s' % str(net_cls_counts))
+        # print('Data statistics: %s' % str(net_cls_counts))
 
         local_sizes = []
         for i in range(n_nets):
             local_sizes.append(len(net_dataidx_map[i]))
         local_sizes = np.array(local_sizes)
         weights = local_sizes/np.sum(local_sizes)
-        print(weights)
+        # print(weights)
 
         return net_dataidx_map, weights
 
@@ -165,14 +139,14 @@ class DataPartitioner(object):
             unq, unq_cnt = np.unique(labelList[dataidx], return_counts=True)
             tmp = {unq[i]: unq_cnt[i] for i in range(len(unq))}
             net_cls_counts[net_i] = tmp
-        print('Data statistics: %s' % str(net_cls_counts))
+        # print('Data statistics: %s' % str(net_cls_counts))
 
         local_sizes = []
         for i, _ in enumerate(size):
             local_sizes.append(len(net_dataidx_map[i]))
         local_sizes = np.array(local_sizes)
         weights = local_sizes/np.sum(local_sizes)
-        print(weights)
+        # print(weights)
 
         return net_dataidx_map, weights
 

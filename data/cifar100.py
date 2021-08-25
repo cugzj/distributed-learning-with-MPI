@@ -53,7 +53,7 @@ def get_testdataset(dataset_root='./dataset'):
 if __name__ == "__main__":
     # store partitioned dataset 
     num_workers = 10
-    workers = list(range(num_workers))
+    workers = np.arange(num_workers) + 1
     path = 'D:/dataset'
     
     data_ratio_pairs, _ = get_dataset(workers, workers, isNonIID=False, dataset_root=path, data_aug=False)
@@ -61,14 +61,16 @@ if __name__ == "__main__":
     if os.path.exists(path) is False:
         os.makedirs(path)
 
-    for idx, pair in enumerate(data_ratio_pairs):
+    for idx, pair in data_ratio_pairs.items():
         data, ratio = pair
         current_path = os.path.join(path, str(idx))
-        if os.path.exists(current_path) is False:
-            os.makedirs(current_path)
-        
+        if os.path.exists(current_path):
+            import shutil
+            shutil.rmtree(current_path)
+        os.makedirs(current_path)
+
         with open(current_path + '/weight.txt', 'w') as f:
-            f.write(ratio)
+            f.write('{}\t{}\n'.format(idx, ratio))
         
         for i in range(len(data)):
             sample, target = data[i]

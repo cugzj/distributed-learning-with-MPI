@@ -129,5 +129,5 @@ def init_processes(rank, size, model, args, test_data, cpu, gpu, backend='mpi'):
         os.makedirs(args.result)
     result_file = os.path.join(args.result, '{}.txt'.format(len(os.listdir(args.result))))
     f_result = open(result_file, 'w')
-    f_result.write(json.dumps(args) + '\n')
+    f_result.write(json.dumps(vars(args)) + '\n')
     run(size, model, args, test_data, f_result, cpu, gpu)

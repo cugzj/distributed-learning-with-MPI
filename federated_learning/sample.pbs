@@ -8,7 +8,7 @@
 
 module load anaconda3-2021.05
 module load openmpi-4.0.1-gcc-8.3.0-cuda-10.1
-source activate dist_learning
+source activate torch_1.7.1
 #################################################################
 NP=`cat $PBS_NODEFILE | wc -l`
 NN=`cat $PBS_NODEFILE | sort | uniq | tee /tmp/nodes.$$ | wc -l`
@@ -22,10 +22,10 @@ nvidia-smi > nv.out
 
 # This is the sample for DGS
 
-echo $NP
-export OMPI_MCA_btl_openib_allow_ib=1
-export OMPI_MCA_btl_openib_if_include="mlx5_0:1"
-mpiexec -n $NP python -u start.py --root ~/dataset --non-iid True --dirichlet True > test.out
+# echo $NP
+# export OMPI_MCA_btl_openib_allow_ib=1
+# export OMPI_MCA_btl_openib_if_include="mlx5_0:1"
+mpiexec -n $NP python -u start.py --root ~/dataset --non-iid True --dirichlet True --backend gloo > test.out
 
 
 echo "++++++++++++++++++++++++++++++++++++++++"

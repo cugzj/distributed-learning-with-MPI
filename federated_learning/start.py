@@ -13,7 +13,7 @@ method = parser.parse_known_args()[0].method
 
 # Dataset 
 parser.add_argument('--root', type=str, default='./dataset', help='The root of dataset')
-parser.add_argument('--dataset', type=str, default='mnist', help='The name of dataset used')
+parser.add_argument('--dataset', type=str, default='cifar100', help='The name of dataset used')
 parser.add_argument('--presplit', type=bool, default=False, help='Use the split dataset as training')
 parser.add_argument('--non-iid', type=bool, default=False, help='The distribution of training data')
 parser.add_argument('--dirichlet', type=bool, default=False, help='Non-iid distribution follows Dirichlet')
@@ -22,7 +22,7 @@ parser.add_argument('--pathological', type=bool, default=False, help='Non-iid di
 parser.add_argument('--classes', type=int, default=2, help='Number of classes on each client')
 
 # Model 
-parser.add_argument('--model', type=str, default='VGG19', help='The name of model used') 
+parser.add_argument('--model', type=str, default='vgg19', help='The name of model used') 
 
 # Result output root 
 parser.add_argument('--result', type=str, default='./result', help='The directory of the result')
