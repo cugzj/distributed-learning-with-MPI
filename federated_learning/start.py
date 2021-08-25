@@ -91,7 +91,7 @@ else:
     mp.set_start_method("spawn")
     for idex in range(args.size+1):
         gpu = torch.device('cuda:{}'.format(idex%torch.cuda.device_count())) if torch.cuda.is_available() else torch.device('cpu')
-        print('Hello World Multiprocessing! I am process', idex, 'of', size)
+        print('Hello World Multiprocessing! I am process', idex, 'of', args.size+1)
         if idex == 0:
             test_data = dataset.get_testdataset(args.root)
             p = mp.Process(target=param_server.init_processes, args=(idex, size, model, args, test_data, cpu, gpu, args.backend.lower()))
